@@ -15,15 +15,17 @@ class RandomEngine:
         move = legal_moves[np.random.randint(0, len(legal_moves))]
         return move
 
-def step(board, engine):
-    move = engine.make_move(board)    
-    board.push(move)
+# def step(board, engine):
+    
 
 board = chess.Board()
 engine = RandomEngine()
 episode = []
-while not board.is_game_over():
-    step(board, engine)
-
+while not board.is_game_over():  
+    move = engine.make_move(board)
+    episode.append((board.fen(), move, 0))
+    board.push(move)
+    
 print(board)
 
+print(episode[:3])
