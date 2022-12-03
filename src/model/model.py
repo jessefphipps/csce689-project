@@ -122,11 +122,16 @@ class EngineHelpers:
 
 
 class Engine689:
-    def __init__(self, n_res_filters):
+    def __init__(self, n_res_layers, n_res_filters):
         self.n_res_filters = n_res_filters
+        self.n_res_layers = n_res_layers
         self.helpers = EngineHelpers()
         self.build()
-        self.model.compile()
+        self.model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.001),
+                           loss={'actor_output': actor_loss(),
+                                 'critic_output': critic_loss()},
+                           loss_weights={'actor_output': 1.0,
+                                         'critic_output': 1.0})
         
 
     def build(self):
@@ -149,7 +154,7 @@ class Engine689:
         x = layers.Activation("relu")(x)
         x = layers.Flatten()(x)
 
-        policy_head_out = layers.Dense(4184, activation="softmax")(x)
+        policy_head_out = layers.Dense(4184, activation="softmax", name='actor_output')(x)
 
         #Value head
         x = layers.Conv2D(self.n_res_filters, (3, 3), padding="same")(end_of_residuals)
@@ -157,9 +162,10 @@ class Engine689:
         x = layers.Activation("relu")(x)
         x = layers.Flatten()(x)
         x = layers.Dense(128, activation="relu")(x)
-        value_head_out = layers.Dense(1, activation="tanh")(x)
+        value_head_out = layers.Dense(1, activation="tanh", name='critic_output')(x)
 
         self.model = keras.Model(input_layer, [policy_head_out, value_head_out])
+
 
     def add_residual_layer(self, x):
 
@@ -209,7 +215,7 @@ class Engine689:
         en_passant = np.zeros((8, 8, 1), dtype=np.float32)
 
         if en_passant_str != "-":
-            coords = self.helpers.en_passant_to_coord()
+            coords = self.helpers.en_passant_to_coord(en_passant_str)
             en_passant[coords[0], coords[1]] = 1
         
         castling = split_fen[2]
@@ -241,6 +247,37 @@ class Engine689:
 
         return input_matrix
 
+    def make_move_util(self, board, verbose=0):
+        board_fen = self.helpers.generate_board_fen(board)
+        input_matrix = self.fen_to_input(board_fen)
+        model_outputs = self.model.predict(np.array([input_matrix]), verbose=0)
+        action_outputs = model_outputs[0][0]
+
+        active_color = board.fen().split(" ")[1]
+        legal_move_ucis = [move.uci() for move in board.legal_moves]
+
+        if verbose:
+            print("Active color:", active_color)
+
+        if active_color == "w":
+            valid_model_output_indices = [self.helpers.white_uci_to_output_mapping[uci] for uci in legal_move_ucis]
+            legal_move_outputs = action_outputs[valid_model_output_indices]
+            greedy_action_index = np.argmax(legal_move_outputs)
+            greedy_uci = legal_move_ucis[greedy_action_index]
+
+            assert action_outputs[self.helpers.white_uci_to_output_mapping[greedy_uci]] == np.max(legal_move_outputs)
+
+            return chess.Move.from_uci(greedy_uci), action_outputs, model_outputs[1][0], valid_model_output_indices
+        elif active_color == "b":
+            valid_model_output_indices = [self.helpers.black_uci_to_output_mapping[uci] for uci in legal_move_ucis]
+            legal_move_outputs = action_outputs[valid_model_output_indices]
+            greedy_action_index = np.argmax(legal_move_outputs)
+            greedy_uci = legal_move_ucis[greedy_action_index]
+
+            assert action_outputs[self.helpers.black_uci_to_output_mapping[greedy_uci]] == np.max(legal_move_outputs)
+
+            return chess.Move.from_uci(greedy_uci), action_outputs, model_outputs[1][0], valid_model_output_indices
+        
     def make_move(self, board, verbose=0):
         board_fen = self.helpers.generate_board_fen(board)
         input_matrix = self.fen_to_input(board_fen)
@@ -271,3 +308,12 @@ class Engine689:
             assert action_outputs[self.helpers.black_uci_to_output_mapping[greedy_uci]] == np.max(legal_move_outputs)
 
             return chess.Move.from_uci(greedy_uci)
+
+def actor_loss():
+    def loss(advantage, predicted_output):
+        return -tf.keras.backend.sum(advantage * tf.keras.backend.log(predicted_output))
+    return loss
+def critic_loss():
+    def loss(advantage, predicted_outputs):
+        return tf.keras.backend.sum((advantage-predicted_outputs)**2/tf.cast(tf.size(predicted_outputs), tf.dtypes.float32))
+    return loss
