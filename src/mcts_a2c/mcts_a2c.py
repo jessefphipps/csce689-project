@@ -249,17 +249,18 @@ class Trainer:
             for k, v in root_node.children.items():
                 action_probs[k] = v.visit_count
             
+            action_probs = action_probs / np.sum(action_probs)
             if self.train_with_stockfish:
                 # change action_probs to be action stockfish takes
                 result = self.stockfish.play(board, chess.engine.Limit(time=0.01))
-                action_probs = np.zeros(4184)
+                action_probs_tmp = np.zeros(4184)
                 if current_player == 1:
                     action_index = self.engine.helpers.white_uci_to_output_mapping[str(result.move)]
                 else:
                     action_index = self.engine.helpers.black_uci_to_output_mapping[str(result.move)]
-                action_probs[action_index] = 1
-            else:
-                action_probs = action_probs / np.sum(action_probs)
+                action_probs_tmp[action_index] = 1
+                action_probs *= action_probs_tmp   # hot encode original action_probs
+                
             # _, _, value, _ = self.engine.make_move_util(board)
 
             action = None
