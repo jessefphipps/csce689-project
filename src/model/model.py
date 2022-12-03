@@ -10,8 +10,6 @@ from tensorflow import keras
 from keras import layers
 import keras.backend as K
 
-# def policy_loss():
-
 class EngineHelpers:
 
     def __init__(self):
@@ -28,7 +26,7 @@ class EngineHelpers:
 
         promotion_ucis = [f"{file}7{file}8{p}" for file in "abcdefgh" for p in promotion_pieces]
         promotion_ucis.extend([f"{files[i]}7{files[i+1]}8{p}" for i in range(7) for p in promotion_pieces])
-        promotion_ucis.extend([f"{files[i-1]}7{files[i]}8{p}" for i in range(1, 8) for p in promotion_pieces])
+        promotion_ucis.extend([f"{files[i]}7{files[i-1]}8{p}" for i in range(1, 8) for p in promotion_pieces])
 
         all_ucis = move_ucis + promotion_ucis
 
@@ -42,7 +40,7 @@ class EngineHelpers:
 
         promotion_ucis = [f"{file}7{file}8{p}" for file in "abcdefgh" for p in promotion_pieces]
         promotion_ucis.extend([f"{files[i]}7{files[i+1]}8{p}" for i in range(7) for p in promotion_pieces])
-        promotion_ucis.extend([f"{files[i-1]}7{files[i]}8{p}" for i in range(1, 8) for p in promotion_pieces])  
+        promotion_ucis.extend([f"{files[i]}7{files[i-1]}8{p}" for i in range(1, 8) for p in promotion_pieces])  
 
         all_ucis = move_ucis + promotion_ucis
 
@@ -56,7 +54,7 @@ class EngineHelpers:
 
         promotion_ucis = [f"{file}2{file}1{p}" for file in files for p in promotion_pieces]
         promotion_ucis.extend([f"{files[i]}2{files[i+1]}1{p}" for i in range(7) for p in promotion_pieces])
-        promotion_ucis.extend([f"{files[i-1]}2{files[i]}1{p}" for i in range(1, 8) for p in promotion_pieces])
+        promotion_ucis.extend([f"{files[i]}2{files[i-1]}1{p}" for i in range(1, 8) for p in promotion_pieces])
 
         all_ucis = move_ucis + promotion_ucis
 
@@ -70,7 +68,7 @@ class EngineHelpers:
 
         promotion_ucis = [f"{file}2{file}1{p}" for file in files for p in promotion_pieces]
         promotion_ucis.extend([f"{files[i]}2{files[i+1]}1{p}" for i in range(7) for p in promotion_pieces])
-        promotion_ucis.extend([f"{files[i-1]}2{files[i]}1{p}" for i in range(1, 8) for p in promotion_pieces])
+        promotion_ucis.extend([f"{files[i]}2{files[i-1]}1{p}" for i in range(1, 8) for p in promotion_pieces])
 
         all_ucis = move_ucis + promotion_ucis
 
@@ -96,7 +94,7 @@ class EngineHelpers:
             flipped_file_index = 7 - file_index
             flipped_file = "abcdefgh"[flipped_file_index]
             flipped_rank = 8 - int(en_passant[1])
-            return "".join([flipped_file, flipped_rank])
+            return "".join([str(flipped_file), str(flipped_rank)])
         else:
             return en_passant
 
@@ -151,7 +149,7 @@ class Engine689:
         x = layers.Activation("relu")(x)
         x = layers.Flatten()(x)
 
-        policy_head_out = layers.Dense(64*64, activation="softmax")(x)
+        policy_head_out = layers.Dense(4184, activation="softmax")(x)
 
         #Value head
         x = layers.Conv2D(self.n_res_filters, (3, 3), padding="same")(end_of_residuals)
