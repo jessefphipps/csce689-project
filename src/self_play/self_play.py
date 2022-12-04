@@ -26,23 +26,29 @@ class RandomEngine:
 #%%
 board = chess.Board()
 random_engine = RandomEngine()
-load_saved_model = tf.keras.models.load_model('../../models/prelim_model', custom_objects={'loss': {'actor_output_loss' : actor_loss, 'critic_output_loss' : critic_loss}})
-engine689 = Engine689(1)
+load_saved_model = tf.keras.models.load_model('../../models/full_model', custom_objects={'loss': {'actor_output_loss' : actor_loss(), 'critic_output_loss' : critic_loss()}})
+engine689 = Engine689(1,1)
 engine689.model = load_saved_model
 mcts_agent = MCTS_Agent(engine689, {'num_simulations': 50})
 
 episode = []
 steps = 0
-while not board.is_game_over():  
+while True:  
     # trained engine move
     # move = engine689.make_move(board)
     move = mcts_agent.make_move(board, player=1)    # 1 white, -1 black
     board.push(move)
-
+    print(board)
+    print("===============")
+    if board.is_game_over():
+        break
+    
     # random engine move
     move = random_engine.make_move(board)
     episode.append((board.fen(), move, 0))
     board.push(move)
     print(board)
     print("===============")
+    if board.is_game_over():
+        break
 print(board.result())

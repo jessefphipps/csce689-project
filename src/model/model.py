@@ -126,7 +126,7 @@ class Engine689:
         self.n_res_layers = n_res_layers
         self.helpers = EngineHelpers()
         self.build()
-        self.model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.001),
+        self.model.compile(optimizer=tf.optimizers.Adam(learning_rate=1e-5),
                            loss={'actor_output': actor_loss(),
                                  'critic_output': critic_loss()},
                            loss_weights={'actor_output': 1.0,
@@ -142,7 +142,7 @@ class Engine689:
         x = layers.BatchNormalization(axis=1)(x)
         x = layers.Activation("relu")(x)
         
-        for _ in range(0, 10):
+        for _ in range(0, self.n_res_layers):
             x = self.add_residual_layer(x)
 
         end_of_residuals = x

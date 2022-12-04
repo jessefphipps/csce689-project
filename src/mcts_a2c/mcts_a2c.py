@@ -3,7 +3,7 @@ import sys
 sys.path.append('/home/bryant/csce689-project/src/env')
 sys.path.append("/home/bryant/csce689-project/src/model")
 print(sys.path)
-from model import Engine689, EngineHelpers
+from model import Engine689, EngineHelpers, actor_loss, critic_loss
 from mcts import RandomEngineMCTSNode, MCTS
 import numpy as np
 import math
@@ -116,11 +116,10 @@ class Node:
         return "{} Prior: {} Count: {} Value: {}".format(self.state.__str__(), prior, self.visit_count, self.value())
 
 
-class MCTS_Model(MCTS):
+class MCTS_Model:
     "Monte Carlo Tree Search with model"
 
     def __init__(self, engine, n_sim):
-        super().__init__()
         self.engine = engine
         self.n_sim = n_sim
     
@@ -131,7 +130,9 @@ class MCTS_Model(MCTS):
         chosen_move, action_probs, value, valid_model_output_indices = self.engine.make_move_util(board)
         if np.isnan(action_probs).any():
             action_probs = np.array([1/4184]*4184)
-        action_probs = action_probs * np.array([1 if i in valid_model_output_indices else 0 for i in range(4184)])
+        action_probs = action_probs * np.array([1.0 if i in valid_model_output_indices else 0.0 for i in range(4184)])
+        if not np.any(action_probs):
+            action_probs = np.array([1.0 if i in valid_model_output_indices else 0.0 for i in range(4184)])
         action_probs /= np.sum(action_probs)
         root.expand(chess.Board(board.fen()), to_play, action_probs)
 
@@ -165,9 +166,9 @@ class MCTS_Model(MCTS):
                 # expand
                 chosen_move, action_probs, value, valid_model_output_indices = self.engine.make_move_util(next_board)
                 value = value[0]
-                action_probs = action_probs * np.array([1 if i in valid_model_output_indices else 0 for i in range(4184)])
-                if np.isnan(action_probs).any():
-                    action_probs = np.array([1/4184]*4184)
+                action_probs = action_probs * np.array([1.0 if i in valid_model_output_indices else 0.0 for i in range(4184)])
+                if not np.any(action_probs):
+                    action_probs = np.array([1.0 if i in valid_model_output_indices else 0.0 for i in range(4184)]) / sum(np.array([1.0 if i in valid_model_output_indices else 0.0 for i in range(4184)]))
                 action_probs /= np.sum(action_probs)
                 node.expand(next_board, parent.to_play*-1, action_probs)
             self.backpropagate(search_path, value, parent.to_play*-1)
@@ -231,9 +232,9 @@ class Trainer:
         self.engine = engine
         self.args = args
         self.mcts = MCTS_Model(engine=self.engine, n_sim=self.args['num_simulations'])
-        self.stockfish = chess.engine.SimpleEngine.popen_uci("/home/bryant/csce689-project/engines/stockfish_15_win_x64_avx2/stockfish_15_x64_avx2.exe")
-        self.stockfish.configure({"UCI_Elo": 1350})
-        self.train_with_stockfish = True
+        # self.stockfish = chess.engine.SimpleEngine.popen_uci("/home/bryant/csce689-project/engines/stockfish_15_win_x64_avx2/stockfish_15_x64_avx2.exe")
+        # self.stockfish.configure({"UCI_Elo": 1350})
+        self.train_with_stockfish = self.args['train_with_stockfish']
 
     def execute_episode(self):
         train_examples = []
@@ -288,7 +289,7 @@ class Trainer:
 
 
             # add to training set
-            train_examples.append((board, current_player, action_probs))
+            train_examples.append((board.fen(), current_player, action_probs))
             # train_examples.append((board, current_player, one_hot_delta))
             
             board = next_board
@@ -296,7 +297,7 @@ class Trainer:
             reward = chess_reward(board, current_player)
 
             # limit run time
-            if steps >= 100:
+            if steps >= self.args['max_moves']:
                 reward = 0
 
             if reward is not None:
@@ -306,8 +307,12 @@ class Trainer:
                 
                 return ret
             steps += 1
-            print(f'At step {steps}')
-            print(board)
+            print(f'At step {steps}                ', end='\r')
+            # print(board)
+
+            # experimental
+            del root_node
+            del self.mcts
 
     def learn(self):
         history = []
@@ -315,13 +320,15 @@ class Trainer:
             train_examples = []
 
             for eps in range(self.args['num_episodes']):
+                print(f'training iteration {i} episode {eps}')
                 iteration_train_examples = self.execute_episode()
                 train_examples.extend(iteration_train_examples)
+                print()
             
             random.shuffle(train_examples)
             hist = self.train(train_examples)
             history.append(hist)
-        self.engine.model.save('/home/bryant/csce689-project/models/full_model')
+        self.engine.model.save('/home/bryant/csce689-project/models/full_model2')
         return history
     
     def train(self, training):
@@ -332,14 +339,15 @@ class Trainer:
         target_policy = [i[1] for i in training]
         target_value = [i[2] for i in training]
 
-        board_fens = list(map(self.engine.helpers.generate_board_fen, boards))
+        # board_fens = list(map(self.engine.helpers.generate_board_fen, boards))
+        board_fens = boards
         board_input = list(map(self.engine.fen_to_input, board_fens))
 
         hist = self.engine.model.fit(x=np.array(board_input),
                               y={'actor_output': np.array(target_policy), 'critic_output': np.array(target_value, dtype=float)},
                               epochs=self.args['epochs'], batch_size=self.args['batch_size'], verbose=0)
         
-        self.engine.model.save('/home/bryant/csce689-project/models/prelim_model')
+        self.engine.model.save('/home/bryant/csce689-project/models/prelim_model2')
 
         return hist
 
@@ -348,19 +356,34 @@ class Trainer:
 if __name__ == "__main__":
     args = {
         'batch_size' : 64,
-        'num_iterations' : 10,
-        'num_simulations' : 50,
+        'num_iterations' : 100,
+        'num_simulations' : 20,
         'num_episodes' : 5,
         'epochs' : 2,
-        'model_n_resid_layers' : 100,
-        'model_n_resid_filter' : 256
+        'model_n_resid_layers' : 50,
+        'model_n_resid_filter' : 256,
+        'max_moves' : 250,
+        'train_with_stockfish' : False
     }
-    trainer = Trainer(None, Engine689(args['model_n_resid_layers'], args['model_n_resid_filter']), args)
+    continue_training = True
+    print(tf.config.list_physical_devices('GPU'))
+    tf.config.experimental.set_memory_growth(tf.config.list_physical_devices('GPU')[0], True)
+    trainer = None
+    if continue_training:
+        engine = Engine689(args['model_n_resid_layers'], args['model_n_resid_filter'])
+        load_saved_model = tf.keras.models.load_model('/home/bryant/csce689-project/models/prelim_model2', custom_objects={'loss': {'actor_output_loss' : actor_loss(), 'critic_output_loss' : critic_loss()}})
+        engine.model = load_saved_model
+        trainer = Trainer(None, engine, args)
+
+    else:
+        trainer = Trainer(None, Engine689(args['model_n_resid_layers'], args['model_n_resid_filter']), args)
+        
     hist = trainer.learn()
     # print(hist.history.keys())
     # fig, axs = plt.subplots(1, 2)
     # axs[0].plot(hist.history['actor_output_loss'])
     # axs[1].plot(hist.history['critic_output_loss'])
+    trainer.stockfish.quit()
     plt.show()
     
 # %%
