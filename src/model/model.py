@@ -3,7 +3,6 @@ import numpy as np
 from tqdm import tqdm
 import chess.engine
 import chess.svg
-
 import tensorflow as tf
 import tensorflow
 from tensorflow import keras
@@ -135,7 +134,7 @@ class Engine689:
         
 
     def build(self):
-        input_dim = (8, 8, 19)
+        input_dim = (8, 8, 18)
 
         input_layer = layers.Input(input_dim)
 
@@ -182,30 +181,29 @@ class Engine689:
 
     def fen_to_input(self, fen):
         piece_dict = {
-            "P": 1,
-            "N": 2,
-            "B": 3,
-            "R": 4,
-            "Q": 5,
-            "K": 6,
-            "p": 7,
-            "n": 8,
-            "b": 9,
-            "r": 10,
-            "q": 11,
-            "k": 12,
+            "P": 0,
+            "N": 1,
+            "B": 2,
+            "R": 3,
+            "Q": 4,
+            "K": 5,
+            "p": 6,
+            "n": 7,
+            "b": 8,
+            "r": 9,
+            "q": 10,
+            "k": 11,
         }
 
         split_fen = fen.split(" ")
 
-        board_matrix = np.zeros((8, 8, 13))
+        board_matrix = np.zeros((8, 8, 12))
 
         for row_index, row_epd in enumerate(split_fen[0].split("/")):
             col_index = 0
             for character in row_epd:
                 if character.isdigit():
                     for _ in range(int(character)):
-                        board_matrix[row_index, col_index, 0] = 1
                         col_index += 1
                 else:
                     board_matrix[row_index, col_index, piece_dict[character]] = 1
@@ -243,7 +241,7 @@ class Engine689:
 
         input_matrix = np.concatenate([board_matrix, en_passant, king_castle, queen_castle, opponent_king_castle, opponent_queen_castle, move_count], axis=2)
         
-        assert input_matrix.shape == (8, 8, 19)
+        assert input_matrix.shape == (8, 8, 18)
 
         return input_matrix
 
