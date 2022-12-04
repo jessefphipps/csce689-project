@@ -3,7 +3,6 @@ import numpy as np
 from tqdm import tqdm
 import chess.engine
 import chess.svg
-
 import tensorflow as tf
 import tensorflow
 from tensorflow import keras
