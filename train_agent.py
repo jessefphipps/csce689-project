@@ -27,6 +27,9 @@ if __name__ == "__main__":
         'max_moves' : 200,
         'train_with_stockfish' : False
     }
+
+    if 'models' not in os.listdir():
+        os.mkdir('models')
     
     continue_training = False
     print(tf.config.list_physical_devices('GPU'))

@@ -227,7 +227,7 @@ class Trainer:
         self.engine = engine
         self.args = args
         self.mcts = MCTS_Model(engine=self.engine, n_sim=self.args['num_simulations'])
-        self.stockfish = chess.engine.SimpleEngine.popen_uci("../../engines/stockfish_15_win_x64_avx2/stockfish_15_x64_avx2.exe")
+        self.stockfish = chess.engine.SimpleEngine.popen_uci("engines/stockfish_15_win_x64_avx2/stockfish_15_x64_avx2.exe")
         self.stockfish.configure({"UCI_Elo": 1350})
         self.train_with_stockfish = self.args['train_with_stockfish']
 
@@ -336,7 +336,7 @@ class Trainer:
             hist = self.train(train_examples)
             history.append(hist)
             success_metric.append(self.random_metric())
-        self.engine.model.save('../../models/full_model4')
+        self.engine.model.save('models/full_model4')
         return history, success_metric
     
     def train(self, training):
@@ -354,7 +354,7 @@ class Trainer:
                               y={'actor_output': np.array(target_policy), 'critic_output': np.array(target_value, dtype=float)},
                               epochs=self.args['epochs'], batch_size=self.args['batch_size'], verbose=0)
         
-        self.engine.model.save('../../models/prelim_model')
+        self.engine.model.save('models/prelim_model')
 
         return hist
 
@@ -376,7 +376,7 @@ if __name__ == "__main__":
     trainer = None
     if continue_training:
         engine = Engine689(args['model_n_resid_layers'], args['model_n_resid_filter'])
-        load_saved_model = tf.keras.models.load_model('../../models/prelim_model', custom_objects={'loss': {'actor_output_loss' : actor_loss(), 'critic_output_loss' : critic_loss()}})
+        load_saved_model = tf.keras.models.load_model('models/prelim_model', custom_objects={'loss': {'actor_output_loss' : actor_loss(), 'critic_output_loss' : critic_loss()}})
         engine.model = load_saved_model
         trainer = Trainer(None, engine, args)
 
