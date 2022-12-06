@@ -1,9 +1,10 @@
 #%%
 import sys
-sys.path.append('/home/bryant/csce689-project/src/env')
-sys.path.append("/home/bryant/csce689-project/src/model")
-print(sys.path)
-from model import Engine689, EngineHelpers, actor_loss, critic_loss
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+sys.path.append('../env')
+sys.path.append("../model")
+from model import Engine689, EngineHelpers, actor_loss, critic_loss, RandomEngine
 from mcts import RandomEngineMCTSNode, MCTS
 import numpy as np
 import math
@@ -11,31 +12,32 @@ import chess
 import chess.svg
 import tensorflow as tf
 import random
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 
-def ucb_score(parent, child):
+def ucb_score(parent, child, c):
     """
     The score for an action that would transition between the parent and child.
     """
-    prior_score = child.prior * math.sqrt(parent.visit_count) / (child.visit_count + 1)
+    prior_score = child.prior * math.sqrt(parent.visit_count) / (child.visit_count + 1e-6)
     if child.visit_count > 0:
         # The value of the child is from the perspective of the opposing player
         value_score = -child.value()
     else:
         value_score = 0
 
-    return value_score + prior_score
+    return value_score + prior_score*c
 
 
 class Node:
-    def __init__(self, prior, to_play):
+    def __init__(self, prior, to_play, c=1):
         self.visit_count = 0
         self.to_play = to_play
         self.prior = prior
         self.value_sum = 0
         self.children = {}
         self.state = None
+        self.c = c
 
     def expanded(self):
         return len(self.children) > 0
@@ -90,7 +92,7 @@ class Node:
         best_child = None
 
         for action, child in self.children.items():
-            score = ucb_score(self, child)
+            score = ucb_score(self, child, self.c)
             if score > best_score:
                 best_score = score
                 best_action = action
@@ -208,13 +210,6 @@ class MCTS_Agent:
             action_probs[k] = v.visit_count
             val[k] = v.value_sum
         
-        # action_probs = action_probs / np.sum(action_probs)
-        # u_val = action_probs * np.sqrt(np.sum(action_probs ** (1/temperature))) / (1 + action_probs ** (1/temperature))
-
-        # # _, _, value, _ = self.engine.make_move_util(board)
-        # action = np.argmax(val + u_val)
-        # print(action_probs)
-        # print(val)
         action = root_node.select_action(0)
 
         engh = self.engine.helpers
@@ -232,8 +227,8 @@ class Trainer:
         self.engine = engine
         self.args = args
         self.mcts = MCTS_Model(engine=self.engine, n_sim=self.args['num_simulations'])
-        # self.stockfish = chess.engine.SimpleEngine.popen_uci("/home/bryant/csce689-project/engines/stockfish_15_win_x64_avx2/stockfish_15_x64_avx2.exe")
-        # self.stockfish.configure({"UCI_Elo": 1350})
+        self.stockfish = chess.engine.SimpleEngine.popen_uci("../../engines/stockfish_15_win_x64_avx2/stockfish_15_x64_avx2.exe")
+        self.stockfish.configure({"UCI_Elo": 1350})
         self.train_with_stockfish = self.args['train_with_stockfish']
 
     def execute_episode(self):
@@ -261,14 +256,12 @@ class Trainer:
                     action_index = self.engine.helpers.black_uci_to_output_mapping[str(result.move)]
                 action_probs_tmp[action_index] = 1
                 action_probs *= action_probs_tmp   # hot encode original action_probs
-                
-            # _, _, value, _ = self.engine.make_move_util(board)
 
             action = None
             if self.train_with_stockfish:
                 action = action_index
             else:
-                action = root_node.select_action(1)
+                action = root_node.select_action(0)
 
             engh = self.engine.helpers
             if current_player == 1: # white
@@ -279,14 +272,6 @@ class Trainer:
             tmp_board = chess.Board(root_node.state.fen())
             tmp_board.push(chess.Move.from_uci(action_uci))
             next_board = tmp_board
-
-            # _, _, next_value, _ = self.engine.make_move_util(board)
-            # deltas = next_value - value
-            # action_one_hot = np.zeros(4184)
-            # action_one_hot[action] = 1
-            # one_hot_delta = deltas * action_one_hot
-            # one_hot_delta = action_probs * action_one_hot
-
 
             # add to training set
             train_examples.append((board.fen(), current_player, action_probs))
@@ -308,14 +293,36 @@ class Trainer:
                 return ret
             steps += 1
             print(f'At step {steps}                ', end='\r')
-            # print(board)
+            print(board)
 
             # experimental
             del root_node
             del self.mcts
+            
+    def random_metric(self):
+        random_engine = RandomEngine()
+        random_board = chess.Board()
+        num_moves = 0
+        while True:  
+            # trained engine move
+            # move = engine689.make_move(board)
+            move = self.engine.make_move(random_board)   # 1 white, -1 black
+            random_board.push(move)
+            num_moves += 1
+            if random_board.is_game_over():
+                break
+
+            # random engine move
+            move = random_engine.make_move(random_board)
+            random_board.push(move)
+            if random_board.is_game_over():
+                break
+        
+        return random_board.fen(), num_moves, random_board.result()
 
     def learn(self):
         history = []
+        success_metric = []
         for i in range(1, self.args['num_iterations']+1):
             train_examples = []
 
@@ -328,8 +335,9 @@ class Trainer:
             random.shuffle(train_examples)
             hist = self.train(train_examples)
             history.append(hist)
-        self.engine.model.save('/home/bryant/csce689-project/models/full_model2')
-        return history
+            success_metric.append(self.random_metric())
+        self.engine.model.save('../../models/full_model4')
+        return history, success_metric
     
     def train(self, training):
         pi_losses = []
@@ -339,7 +347,6 @@ class Trainer:
         target_policy = [i[1] for i in training]
         target_value = [i[2] for i in training]
 
-        # board_fens = list(map(self.engine.helpers.generate_board_fen, boards))
         board_fens = boards
         board_input = list(map(self.engine.fen_to_input, board_fens))
 
@@ -347,7 +354,7 @@ class Trainer:
                               y={'actor_output': np.array(target_policy), 'critic_output': np.array(target_value, dtype=float)},
                               epochs=self.args['epochs'], batch_size=self.args['batch_size'], verbose=0)
         
-        self.engine.model.save('/home/bryant/csce689-project/models/prelim_model2')
+        self.engine.model.save('../../models/prelim_model')
 
         return hist
 
@@ -356,34 +363,25 @@ class Trainer:
 if __name__ == "__main__":
     args = {
         'batch_size' : 64,
-        'num_iterations' : 100,
-        'num_simulations' : 20,
+        'num_iterations' : 20,
+        'num_simulations' : 50,
         'num_episodes' : 5,
         'epochs' : 2,
         'model_n_resid_layers' : 50,
         'model_n_resid_filter' : 256,
-        'max_moves' : 250,
+        'max_moves' : 125,
         'train_with_stockfish' : False
     }
-    continue_training = True
-    print(tf.config.list_physical_devices('GPU'))
-    tf.config.experimental.set_memory_growth(tf.config.list_physical_devices('GPU')[0], True)
+    continue_training = False
     trainer = None
     if continue_training:
         engine = Engine689(args['model_n_resid_layers'], args['model_n_resid_filter'])
-        load_saved_model = tf.keras.models.load_model('/home/bryant/csce689-project/models/prelim_model2', custom_objects={'loss': {'actor_output_loss' : actor_loss(), 'critic_output_loss' : critic_loss()}})
+        load_saved_model = tf.keras.models.load_model('../../models/prelim_model', custom_objects={'loss': {'actor_output_loss' : actor_loss(), 'critic_output_loss' : critic_loss()}})
         engine.model = load_saved_model
         trainer = Trainer(None, engine, args)
 
     else:
         trainer = Trainer(None, Engine689(args['model_n_resid_layers'], args['model_n_resid_filter']), args)
         
-    hist = trainer.learn()
-    # print(hist.history.keys())
-    # fig, axs = plt.subplots(1, 2)
-    # axs[0].plot(hist.history['actor_output_loss'])
-    # axs[1].plot(hist.history['critic_output_loss'])
-    trainer.stockfish.quit()
-    plt.show()
-    
-# %%
+    hist, success_metric = trainer.learn()
+    np.save("Model_4_Results", success_metric, allow_pickle=True)

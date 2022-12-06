@@ -9,6 +9,14 @@ from tensorflow import keras
 from keras import layers
 import keras.backend as K
 
+class RandomEngine:
+    def __init__(self):
+        pass
+    def make_move(self, board):
+        legal_moves = list(board.legal_moves)
+        move = legal_moves[np.random.randint(0, len(legal_moves))]
+        return move
+
 class EngineHelpers:
 
     def __init__(self):
@@ -264,7 +272,7 @@ class Engine689:
             greedy_uci = legal_move_ucis[greedy_action_index]
 
             assert action_outputs[self.helpers.white_uci_to_output_mapping[greedy_uci]] == np.max(legal_move_outputs)
-
+            
             return chess.Move.from_uci(greedy_uci), action_outputs, model_outputs[1][0], valid_model_output_indices
         elif active_color == "b":
             valid_model_output_indices = [self.helpers.black_uci_to_output_mapping[uci] for uci in legal_move_ucis]

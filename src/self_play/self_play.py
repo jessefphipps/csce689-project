@@ -1,4 +1,6 @@
 #%%
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 import chess
 import numpy as np
 from tqdm import tqdm
@@ -26,7 +28,7 @@ class RandomEngine:
 #%%
 board = chess.Board()
 random_engine = RandomEngine()
-load_saved_model = tf.keras.models.load_model('../../models/full_model', custom_objects={'loss': {'actor_output_loss' : actor_loss(), 'critic_output_loss' : critic_loss()}})
+load_saved_model = tf.keras.models.load_model('../../models/full_model3', custom_objects={'loss': {'actor_output_loss' : actor_loss(), 'critic_output_loss' : critic_loss()}})
 engine689 = Engine689(1,1)
 engine689.model = load_saved_model
 mcts_agent = MCTS_Agent(engine689, {'num_simulations': 50})

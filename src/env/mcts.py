@@ -211,8 +211,8 @@ if __name__ == "__main__":
     # create agents
     mcts_white = MCTS()    # white
     # mcts_black = MCTS()    # black
-    # engine = RandomEngine()
-    engine = chess.engine.SimpleEngine.popen_uci("/home/bryant/csce689-project/engines/stockfish_15_win_x64_avx2/stockfish_15_x64_avx2.exe")
+    engine = RandomEngine()
+    # engine = chess.engine.SimpleEngine.popen_uci("/home/bryant/csce689-project/engines/stockfish_15_win_x64_avx2/stockfish_15_x64_avx2.exe")
     # engine.configure({"Skill Level" : 2})
 
     steps = 0
@@ -244,10 +244,10 @@ if __name__ == "__main__":
         # node = RandomEngineMCTSNode(board=node.board, turn=(not node.turn), winner=(not node.winner if node.winner is not None else None), terminal=node.terminal, color='white')
 
         board = chess.Board(node.board)
-        # eng_move = engine.make_move(board)
-        eng_move = engine.play(board, chess.engine.Limit(time=0.001))
-        # board.push(eng_move)
-        board.push(eng_move.move)
+        eng_move = engine.make_move(board)
+        # eng_move = engine.play(board, chess.engine.Limit(time=0.001))
+        board.push(eng_move)
+        # board.push(eng_move.move)
         node = RandomEngineMCTSNode(board=board.fen(), turn=True, winner=None, terminal=board.is_game_over(), color='white')
         print(chess.Board(node.board))
         print("==================")
