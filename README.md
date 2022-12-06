@@ -5,7 +5,7 @@ By Bryant Passage and Jesse Phipps
 
 Stockfish-aided immitation learning self-play with deep neural networks applied to chess.
 
-Before running, create a conda event with the provided env.yml by running **conda env create -f env.yml**
+Before running, create a conda environment with the provided env.yml by running **conda env create -f env.yml**
 
 To train a model, modify the arguments within train_agent.py and execute the file from your terminal with **python train_engine689.py**. This will create a model in the models/ folder to be used in your engine for chess play.
 
